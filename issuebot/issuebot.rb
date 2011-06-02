@@ -85,8 +85,9 @@ class IssueDiff
     common_zip.select {|(o, n)|
       o['comments'].to_i < n['comments'].to_i
     }.map {|(o, n)|
-      n['comments'] = self.comments(n['number']).reverse[0, n['comments'].to_i - o['comments'].to_i]
-      n
+      n.dup.tap {|res|
+        res['comments'] = self.comments(n['number']).reverse[0, n['comments'].to_i - o['comments'].to_i]
+      }
     }
   end
 
