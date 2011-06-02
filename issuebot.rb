@@ -44,8 +44,9 @@ end
 
 class IssueDiff
   attr_reader :old
-  def initialize(*args)
-    @fetcher = IssueFetcher.new(*args)
+  def initialize(user, repo, cache)
+    @user, @repo = user, repo
+    @fetcher = IssueFetcher.new(user, repo, cache)
     @old = @fetcher.issues
   end
 
@@ -83,7 +84,10 @@ class IssueDiff
   def commented
     common_zip.select {|(o, n)|
       o['comments'].to_i < n['comments'].to_i
-    }.map(&:last)
+    }.map {|(o, n)|
+      n['comments'] = self.comments(n['number']).reverse[0, n['comments'].to_i - o['comments'].to_i]
+      n
+    }
   end
 
   def opened
@@ -101,6 +105,11 @@ class IssueDiff
 protected
   def common_zip
     (old - removed).zip(new - created)
+  end
+
+  def comments(id)
+    uri = URI.parse("http://github.com/api/v2/yaml/issues/comments/#@user/#@repo/#{id}")
+    YAML.load(Net::HTTP.get(uri))['comments']
   end
 end
 
@@ -257,7 +266,9 @@ def check_update
     }
 
     diff.commented.each {|issue|
-      $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035commented\x03\x02[\x02%d\x02] | %s - %s\r\n" % [issue['user'], repo, issue['number'], issue['title'], bit.ly(issue['html_url'])])
+      issue['comments'].each {|comment|
+        $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035commented\x03\x02[\x02%d\x02] | %s - %s\r\n" % [comment['user'], repo, issue['number'], issue['title'], bit.ly(issue['html_url'])])
+      }
     }
   }
 end
