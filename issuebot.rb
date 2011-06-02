@@ -2,17 +2,17 @@
 
 # CONFIGS
 SERVER = 'irc.freenode.net'
-PORT = 6697
-SSL = true
-CHAN = '##distro'
-NAME = 'issuebot'
+PORT   = 6697
+SSL    = true
+CHAN   = '##distro'
+NAME   = 'issuebot'
 
-USER = 'distro'
+USER       = 'distro'
 CHECK_TIME = 60
-LOGFILE = false #or File.join(ENV['HOME'], '.issuebot.log')
+LOGFILE    = false # or File.join(ENV['HOME'], '.issuebot.log')
 # END
 
-if RUBY_VERSION !~ /^1.9/
+if RUBY_VERSION !~ /^1\.9)(\.[2-9])?/
   require 'rubygems'
   require 'openssl/nonblock'
 end
