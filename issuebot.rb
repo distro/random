@@ -278,7 +278,7 @@ $stdout.puts "Connected :D"
 loop do
   res = IO.select([$sock, STDIN], nil, nil, 2)
 
-  if Time.now <= $last_check + CHECK_TIME
+  if Time.now >= $last_check + CHECK_TIME
     $last_check = Time.now
     check_update
   end
