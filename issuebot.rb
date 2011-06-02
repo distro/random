@@ -1,5 +1,17 @@
 #! /usr/bin/env ruby
 
+# CONFIGS
+SERVER = 'irc.freenode.net'
+PORT = 6697
+SSL = true
+CHAN = '##distro'
+NAME = 'issuebot'
+
+USER = 'distro'
+CHECK_TIME = 60
+LOGFILE = false #or File.join(ENV['HOME'], '.issuebot.log')
+# END
+
 if RUBY_VERSION !~ /^1.9/
   require 'rubygems'
   require 'openssl/nonblock'
@@ -220,15 +232,6 @@ rescue
   nil
 end
 
-SERVER = 'irc.freenode.net'
-PORT = 6697
-SSL = true
-CHAN = '##distro'
-NAME = 'issuebot'
-
-USER = 'distro'
-CHECK_TIME = 60
-
 $last_check = Time.now - CHECK_TIME
 $diff = UserDiff.new(USER)
 
@@ -283,7 +286,7 @@ COMMANDS = {
 }
 
 $joined = false
-$sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT)
+$sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT, LOGFILE)
 $stdout.puts "Connected :D"
 
 loop do
