@@ -246,7 +246,7 @@ class SSLogSocket < OpenSSL::SSL::SSLSocket
     @logger = false
     @logger = File.open(file, 'w+') rescue false if file
     @stdout = stdout
-    super(TCPSocket.new(host, port))
+    super(TCPSocket.open(host, port))
     self.connect
   end
 
@@ -347,12 +347,10 @@ COMMANDS = {
     $joined = true
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~ignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :ignoring #{match[1]} ##{match[2]}\r\n")
-    $diff.ignore(match[1], match[2])
+    $sock.write("PRIVMSG #{CHAN} :#{"can't" unless $diff.ignore(match[1], match[2])}ignore #{match[1]} ##{match[2]}\r\n")
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~unignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :unignoring #{match[1]} ##{match[2]}\r\n")
-    $diff.unignore(match[1], match[2])
+    $sock.write("PRIVMSG #{CHAN} :#{"can't" unless $diff.unignore(match[1], match[2])}unignore #{match[1]} ##{match[2]}\r\n")
   }
 }
 
@@ -372,7 +370,7 @@ COMMANDS.dup.each {|reg, blk|
   COMMANDS.delete(reg) if blk.arity > 1
 }
 
-loop do
+loop {
   res = IO.select([$sock, STDIN], nil, nil, 2)
 
   if $joined and $last_check < (Time.now - CHECK_TIME)
@@ -406,4 +404,4 @@ loop do
       end
     }
   end
-end
+}
