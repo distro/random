@@ -138,7 +138,7 @@ end
 class LogSocket < TCPSocket
   def initialize (host, port, stdout=true, file=File.join(ENV['HOME'], '.issuebot.log'))
     @logger = false
-    @logger = File.open(file, 'w+') if file and File.exists?(file)
+    @logger = File.open(file, 'w+') rescue false if file
     @stdout = stdout
     super(host, port)
   end
@@ -165,7 +165,7 @@ end
 class SSLogSocket < OpenSSL::SSL::SSLSocket
   def initialize (host, port, stdout=true, file=File.join(ENV['HOME'], '.issuebot.log'))
     @logger = false
-    @logger = File.open(file, 'w+') if file and File.exists?(file)
+    @logger = File.open(file, 'w+') rescue false if file
     @stdout = stdout
     super(TCPSocket.new(host, port))
     self.connect
@@ -217,7 +217,7 @@ end
 SERVER = 'irc.freenode.net'
 PORT = 6697
 SSL = true
-CHAN = '##distro'
+CHAN = '#lolwut'
 NAME = 'issuebot'
 
 USER = 'distro'
@@ -261,6 +261,10 @@ COMMANDS = {
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:!check\s*$/ => lambda {
     check_update
+  },
+  /^:#{Regexp.escape(NAME)}!\S+\s+JOIN\s+:#{Regexp.escape(CHAN)}/ => lambda {
+    $sock.write("PRIVMSG #{CHAN} :HO HAI! ^_^\r\n")
+    $joined = true
   }
 }
 
@@ -272,13 +276,14 @@ COMMANDS = {
   }
 }
 
+$joined = false
 $sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT)
 $stdout.puts "Connected :D"
 
 loop do
   res = IO.select([$sock, STDIN], nil, nil, 2)
 
-  if Time.now >= $last_check + CHECK_TIME
+  if $joined and $last_check < (Time.now - CHECK_TIME)
     $last_check = Time.now
     check_update
   end
