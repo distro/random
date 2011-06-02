@@ -1,9 +1,14 @@
 #! /usr/bin/env ruby
-require 'rubygems'
+
+if RUBY_VERSION !~ /^1.9/
+  require 'rubygems'
+  require 'openssl/nonblock'
+end
+
+require 'cgi'
 require 'yaml'
 require 'json'
 require 'openssl'
-require 'openssl/nonblock'
 require 'net/http'
 
 class IssueFetcher
@@ -195,7 +200,7 @@ end
 
 class Bit
   def self.ly (url)
-    uri = URI.parse("http://api.bit.ly/v3/shorten?longUrl=#{URI.escape(url)}&format=json"+
+    uri = URI.parse("http://api.bit.ly/v3/shorten?longUrl=#{CGI.escape(url)}&format=json"+
     "&apiKey=R_93135b9bc0f5d029f477012858a80057&login=issuebot")
     res = JSON.parse(Net::HTTP.get(uri))
     return url if res['status_code'].to_i != 200
