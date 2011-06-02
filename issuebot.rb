@@ -12,7 +12,7 @@ CHECK_TIME = 60
 LOGFILE    = false # or File.join(ENV['HOME'], '.issuebot.log')
 # END
 
-if RUBY_VERSION !~ /^(1\.9)(?!\.1)/
+if RUBY_VERSION !~ /^(1\.9)/
   require 'rubygems'
   require 'openssl/nonblock'
 end
