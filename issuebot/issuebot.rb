@@ -43,15 +43,34 @@ class IssueFetcher
 end
 
 class IssueDiff
-  attr_reader :old
-  def initialize(user, repo, cache)
-    @user, @repo = user, repo
+  def initialize (user, repo, cache=nil, ignore=nil)
+    @user, @repo, @ignore = user, repo, ignore || []
     @fetcher = IssueFetcher.new(user, repo, cache)
     @old = @fetcher.issues
   end
 
+  def ignore(id)
+    @ignore << id.to_i
+    true
+  end
+
+  def unignore(id)
+    @ignore.delete(id.to_i)
+    true
+  end
+
+  def ignoring; @ignore.dup; end
+
+  def old
+    @old.select {|x|
+      !@ignore.include?(x['number'])
+    }
+  end
+
   def new
-    @new ||= @fetcher.fetch
+    (@new ||= @fetcher.fetch).select {|x|
+      !@ignore.include?(x['number'])
+    }
   end
 
   def issues
@@ -105,7 +124,9 @@ class IssueDiff
 
 protected
   def common_zip
-    (old - removed).zip(new - created)
+    numbers = old.map {|x| x['number'] } & new.map {|x| x['number'] }
+    old.sort_by {|x| x['number'] }.select {|x| numbers.include?(x['number']) }.zip(
+      new.sort_by {|x| x['number'] }.select {|x| numbers.include?(x['number']) })
   end
 
   def comments(id)
@@ -121,14 +142,36 @@ class UserDiff
     @user = user
     @cachefile = cache
     begin
-      @cache = File.exists?(cache) ? YAML.load(File.read(cache)) : {}
+      cache = File.exists?(cache) ? YAML.load(File.read(cache)) : {repos: {}, ignore: {}}
     rescue ArgumentError
       File.unlink(cache)
-      @cache = {}
+      cache = {repos: {}, ignore: {}}
     end
 
-    @repos = Hash[@cache.map {|k, v|
-      [k, IssueDiff.new(user, k, v)]
+    @repos = Hash[cache[:repos].map {|k, v|
+      [k, IssueDiff.new(user, k, v, cache[:ignore][k])]
+    }]
+  end
+
+  def ignore (repo, id)
+    self[repo].tap {|repo|
+      break repo ? repo.ignore(id) : false
+    }.tap {
+      self.save
+    }
+  end
+
+  def unignore (repo, id)
+    self[repo].tap {|repo|
+      break repo ? repo.unignore(id) : false
+    }.tap {
+      self.save
+    }
+  end
+
+  def ignoring
+    Hash[repos.map {|k, v|
+      [k, v.ignoring]
     }]
   end
 
@@ -141,9 +184,7 @@ class UserDiff
       diff.refresh
     }
 
-    File.open(@cachefile, 'w+') {|f|
-      f.write(Hash[repos.map {|k,v| [k, v.issues] }].to_yaml)
-    }
+    self.save
     self
   end
 
@@ -160,6 +201,15 @@ protected
     uri = URI.parse("http://github.com/api/v2/yaml/repos/show/#@user")
     YAML.load(Net::HTTP.get(uri))['repositories'].map {|x|
       x['name'] || x[:name]
+    }
+  end
+
+  def save
+    File.open(@cachefile, 'w+') {|f|
+      f.write({
+        ignore: self.ignoring,
+        repos: Hash[repos.map {|k,v| [k, v.issues] }]
+      }.to_yaml)
     }
   end
 end
@@ -295,6 +345,14 @@ COMMANDS = {
   /^:#{Regexp.escape(NAME)}!\S+\s+JOIN\s+:#{Regexp.escape(CHAN)}/ => lambda {
     $sock.write("PRIVMSG #{CHAN} :HO HAI! ^_^\r\n")
     $joined = true
+  },
+  /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~ignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
+    $sock.write("PRIVMSG #{CHAN} :ignoring #{match[1]} ##{match[2]}\r\n")
+    $diff.ignore(match[1], match[2])
+  },
+  /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~unignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
+    $sock.write("PRIVMSG #{CHAN} :unignoring #{match[1]} ##{match[2]}\r\n")
+    $diff.unignore(match[1], match[2])
   }
 }
 
