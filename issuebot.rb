@@ -242,6 +242,14 @@ rescue
   nil
 end
 
+def log_error
+  yield if block_given?
+rescue Exception => e
+  $sock.write("PRIVMSG #{CHAN} :#{e.backtrace.first}: #{e.to_s.gsub(/\n/, '\n')} - %s\r\n" % [
+    sprunge((["#{caller[0]}: #{e}"] + e.backtrace.map {|x| '  ' + x }).join("\n"))
+  ])
+end
+
 $last_check = Time.now - CHECK_TIME
 $diff = UserDiff.new(USER)
 
@@ -301,12 +309,18 @@ $joined = false
 $sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT, LOGSTDOUT, LOGFILE)
 $stdout.puts "Connected :D"
 
+COMMANDS.dup.each {|reg, blk|
+  COMMANDS.delete(reg) unless blk.arity > 1
+}
+
 loop do
   res = IO.select([$sock, STDIN], nil, nil, 2)
 
   if $joined and $last_check < (Time.now - CHECK_TIME)
     $last_check = Time.now
-    check_update
+    log_error {
+      check_update
+    }
   end
 
   if res
@@ -314,21 +328,20 @@ loop do
       if io == STDIN
         $sock.write(io.gets.gsub(/\r?\n/, "\r\n"))
       else
-        msg = $sock.gets
+        log_error {
+          msg = $sock.gets
+        }
+
         COMMANDS.each {|reg, blk|
           matches = reg.match(msg)
           if matches
-            begin
-              begin
-                blk.call(matches)
-              rescue ArgumentError
+            log_error {
+              if blk.arity == 0
                 blk.call
+              elsif blk.arity <= 1
+                blk.call(matches)
               end
-            rescue Exception => e
-              $sock.write("PRIVMSG #{CHAN} :#{e.backtrace.first}: #{e.to_s.gsub(/\n/, '\n')} - %s\r\n" % [
-                          sprunge((["#{caller[0]}: #{e}"] + e.backtrace.map {|x| '  ' + x }).join("\n"))
-              ])
-            end
+            }
           end
         }
       end
