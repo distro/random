@@ -310,7 +310,7 @@ $sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT, LOGSTDOUT, LOGFILE)
 $stdout.puts "Connected :D"
 
 COMMANDS.dup.each {|reg, blk|
-  COMMANDS.delete(reg) unless blk.arity > 1
+  COMMANDS.delete(reg) if blk.arity > 1
 }
 
 loop do
@@ -328,8 +328,8 @@ loop do
       if io == STDIN
         $sock.write(io.gets.gsub(/\r?\n/, "\r\n"))
       else
-        log_error {
-          msg = $sock.gets
+        msg = log_error {
+          $sock.gets
         }
 
         COMMANDS.each {|reg, blk|
