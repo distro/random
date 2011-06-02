@@ -9,6 +9,7 @@ NAME   = 'issuebot'
 
 USER       = 'distro'
 CHECK_TIME = 60
+LOGSTDOUT  = true
 LOGFILE    = false # or File.join(ENV['HOME'], '.issuebot.log')
 # END
 
@@ -286,7 +287,7 @@ COMMANDS = {
 }
 
 $joined = false
-$sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT, LOGFILE)
+$sock = (SSL ? SSLogSocket : LogSocket).open(SERVER, PORT, LOGSTDOUT, LOGFILE)
 $stdout.puts "Connected :D"
 
 loop do
