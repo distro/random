@@ -1,5 +1,4 @@
-#!/homex/rizzle/.multiruby/install/1.9.1-p431/bin/ruby
-
+#! /usr/bin/env ruby
 require 'cgi'
 require 'yaml'
 require 'json'
