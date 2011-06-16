@@ -214,58 +214,64 @@ protected
   end
 end
 
+module IRC
+  def write (what)
+    @logger.write('<< ' + what) if @logger
+    $stdout.write('<< ' + what) if @stdout
+    super(what)
+  end
+
+  def gets
+    super.tap {|msg|
+      @logger.write('>> ' + msg) if @logger
+      $stdout.write('>> ' + msg) if @stdout
+    }
+  end
+
+  def close
+    @logger.close if @logger
+    super
+  end
+
+  def privmsg (rec, msg)
+    size = 500 - rec.bytesize
+    messages = []
+
+    msg.gsub(/\r/, '').sub(/\n$/, '').split(/\n/).each {|line|
+      messages << ""
+
+      line.split(//).each {|char|
+        messages << "" if char.bytesize + messages.last.bytesize > size
+        messages.last << char
+      }
+    }
+
+    messages.each {|message|
+      self.write("PRIVMSG #{rec} :%s\r\n" % [message])
+    }
+  end
+end
+
 class LogSocket < TCPSocket
+  include IRC
+
   def initialize (host, port, stdout=true, file=File.join(ENV['HOME'], '.issuebot.log'))
     @logger = false
     @logger = File.open(file, 'w+') rescue false if file
     @stdout = stdout
     super(host, port)
   end
-
-  def write (what)
-    @logger.write('<< ' + what) if @logger
-    $stdout.write('<< ' + what) if @stdout
-    super(what)
-  end
-
-  def gets
-    super.tap {|msg|
-      @logger.write('>> ' + msg) if @logger
-      $stdout.write('>> ' + msg) if @stdout
-    }
-  end
-
-  def close
-    @logger.close if @logger
-    super
-  end
 end
 
 class SSLogSocket < OpenSSL::SSL::SSLSocket
+  include IRC
+
   def initialize (host, port, stdout=true, file=File.join(ENV['HOME'], '.issuebot.log'))
     @logger = false
     @logger = File.open(file, 'w+') rescue false if file
     @stdout = stdout
     super(TCPSocket.open(host, port))
     self.connect
-  end
-
-  def write (what)
-    @logger.write('<< ' + what) if @logger
-    $stdout.write('<< ' + what) if @stdout
-    super(what)
-  end
-
-  def gets
-    super.tap {|msg|
-      @logger.write('>> ' + msg) if @logger
-      $stdout.write('>> ' + msg) if @stdout
-    }
-  end
-
-  def close
-    @logger.close if @logger
-    super
   end
 
   class << self; alias open new; end
@@ -296,9 +302,9 @@ end
 def log_error
   yield if block_given?
 rescue Exception => e
-  first = "#{e.class}: #{caller[1]}: #{e.to_s.gsub(/\n/, ' ')}"
+  first = "#{e.class}: #{caller[1]}: #{e}"
 
-  $sock.write("PRIVMSG #{CHAN} :#{first} - %s\r\n" % [
+  $sock.privmsg(CHAN, "#{first} - %s\r\n" % [
     sprunge(([first] + e.backtrace.map {|x| '  ' + x }).join("\n"))
   ])
 end
@@ -311,24 +317,24 @@ def check_update
 
   $diff.each {|repo, diff|
     diff.created.each {|new|
-      $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035created\x03\x02[\x02%d\x02] | %s - %s\r\n" % [new['user'], repo, new['number'], new['title'], bit.ly(new['html_url'])])
+      $sock.privmsg(CHAN, "\x033%s\x03 > \x036%s\x03 \x02\x035created\x03\x02[\x02%d\x02] | %s - %s\r\n" % [new['user'], repo, new['number'], new['title'], bit.ly(new['html_url'])])
     }
 
     diff.removed.each {|del|
-      $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035deleted\x03\x02[\x02%d\x02] | %s\r\n" % [del['user'], repo, del['number'], del['title']])
+      $sock.privmsg(CHAN, "\x033%s\x03 > \x036%s\x03 \x02\x035deleted\x03\x02[\x02%d\x02] | %s\r\n" % [del['user'], repo, del['number'], del['title']])
     }
 
     diff.opened.each {|open|
-      $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035opened\x03\x02[\x02%d\x02] | %s - %s\r\n" % [open['user'], repo, open['number'], open['title'], bit.ly(open['html_url'])])
+      $sock.privmsg(CHAN, "\x033%s\x03 > \x036%s\x03 \x02\x035opened\x03\x02[\x02%d\x02] | %s - %s\r\n" % [open['user'], repo, open['number'], open['title'], bit.ly(open['html_url'])])
     }
 
     diff.closed.each {|closed|
-      $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035closed\x03\x02[\x02%d\x02] | %s - %s\r\n" % [closed['user'], repo, closed['number'], closed['title'], bit.ly(closed['html_url'])])
+      $sock.privmsg(CHAN, "\x033%s\x03 > \x036%s\x03 \x02\x035closed\x03\x02[\x02%d\x02] | %s - %s\r\n" % [closed['user'], repo, closed['number'], closed['title'], bit.ly(closed['html_url'])])
     }
 
     diff.commented.each {|issue|
       issue['comments'].each {|comment|
-        $sock.write("PRIVMSG #{CHAN} :\x033%s\x03 > \x036%s\x03 \x02\x035commented\x03\x02[\x02%d\x02] | %s - %s\r\n" % [comment['user'], repo, issue['number'], issue['title'], bit.ly(issue['html_url'])])
+        $sock.privmsg(CHAN, "\x033%s\x03 > \x036%s\x03 \x02\x035commented\x03\x02[\x02%d\x02] | %s - %s\r\n" % [comment['user'], repo, issue['number'], issue['title'], bit.ly(issue['html_url'])])
       }
     }
   }
@@ -341,24 +347,21 @@ COMMANDS = {
     $sock.write("USER #{NAME} 0 * :#{NAME}\r\n")
     $sock.write("NICK #{NAME}\r\n")
   },
-  /^:(\S+)!\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:!check\s*$/ => lambda {|match|
-    if match[1] =~ /^one/
-      $sock.write("PRIVMSG #{CHAN} :#{match[1]}: GTFO.\r\n")
-    else
-      Thread.start {
-        check_update
-      }
-    end
-  },
+  # Test stuff
+  #/^:(\S+)!\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:!check\s*$/ => lambda {|match|
+    #Thread.start {
+      #check_update
+    #}
+  #},
   /^:#{Regexp.escape(NAME)}!\S+\s+JOIN\s+:#{Regexp.escape(CHAN)}/ => lambda {
-    $sock.write("PRIVMSG #{CHAN} :HO HAI! ^_^\r\n")
+    $sock.privmsg(CHAN, "HO HAI! ^_^\r\n")
     $joined = true
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~ignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :#{"can't " unless $diff.ignore(match[1], match[2])}ignore #{match[1]} ##{match[2]}\r\n")
+    $sock.privmsg(CHAN, "#{"can't " unless $diff.ignore(match[1], match[2])}ignore #{match[1]} ##{match[2]}\r\n")
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~unignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :#{"can't " unless $diff.unignore(match[1], match[2])}unignore #{match[1]} ##{match[2]}\r\n")
+    $sock.privmsg(CHAN, "#{"can't " unless $diff.unignore(match[1], match[2])}unignore #{match[1]} ##{match[2]}\r\n")
   }
 }
 
