@@ -296,8 +296,10 @@ end
 def log_error
   yield if block_given?
 rescue Exception => e
-  $sock.write("PRIVMSG #{CHAN} :#{e.backtrace.first}: #{e.to_s.gsub(/\n/, '\n')} - %s\r\n" % [
-    sprunge((["#{caller[0]}: #{e}"] + e.backtrace.map {|x| '  ' + x }).join("\n"))
+  first = "#{e.class}: #{caller[1]}: #{e.to_s.gsub(/\n/, ' ')}"
+
+  $sock.write("PRIVMSG #{CHAN} :#{first} - %s\r\n" % [
+    sprunge(([first] + e.backtrace.map {|x| '  ' + x }).join("\n"))
   ])
 end
 
@@ -339,18 +341,24 @@ COMMANDS = {
     $sock.write("USER #{NAME} 0 * :#{NAME}\r\n")
     $sock.write("NICK #{NAME}\r\n")
   },
-  /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:!check\s*$/ => lambda {
-    check_update
+  /^:(\S+)!\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:!check\s*$/ => lambda {|match|
+    if match[1] =~ /^one/
+      $sock.write("PRIVMSG #{CHAN} :#{match[1]}: GTFO.\r\n")
+    else
+      Thread.start {
+        check_update
+      }
+    end
   },
   /^:#{Regexp.escape(NAME)}!\S+\s+JOIN\s+:#{Regexp.escape(CHAN)}/ => lambda {
     $sock.write("PRIVMSG #{CHAN} :HO HAI! ^_^\r\n")
     $joined = true
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~ignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :#{"can't" unless $diff.ignore(match[1], match[2])}ignore #{match[1]} ##{match[2]}\r\n")
+    $sock.write("PRIVMSG #{CHAN} :#{"can't " unless $diff.ignore(match[1], match[2])}ignore #{match[1]} ##{match[2]}\r\n")
   },
   /^:\S+\s+PRIVMSG\s+#{Regexp.escape(CHAN)}\s+:~unignore\s+(.+?)\s+(\d+)\s*$/ => lambda {|match|
-    $sock.write("PRIVMSG #{CHAN} :#{"can't" unless $diff.unignore(match[1], match[2])}unignore #{match[1]} ##{match[2]}\r\n")
+    $sock.write("PRIVMSG #{CHAN} :#{"can't " unless $diff.unignore(match[1], match[2])}unignore #{match[1]} ##{match[2]}\r\n")
   }
 }
 
@@ -375,7 +383,7 @@ loop {
 
   if $joined and $last_check < (Time.now - CHECK_TIME)
     $last_check = Time.now
-    log_error {
+    Thread.start {
       check_update
     }
   end
